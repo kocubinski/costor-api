@@ -27,6 +27,10 @@ type Node struct {
 	// orphaned nodes only
 	FirstVersion int64 `protobuf:"varint,7,opt,name=first_version,json=firstVersion,proto3" json:"first_version,omitempty"`
 	LastVersion  int64 `protobuf:"varint,8,opt,name=last_version,json=lastVersion,proto3" json:"last_version,omitempty"`
+
+	// not marshalled
+	Height int8
+	Size   int64
 }
 
 type Nodes struct {
