@@ -4,5 +4,6 @@ import "context"
 
 type Context struct {
 	context.Context
-	DryRun bool
+	DryRun  bool
+	HomeDir string
 }
