@@ -16,7 +16,7 @@ var (
 type Node struct {
 	Key      []byte `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	Value    []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	Delete   bool   `protobuf:"varint,3,opt,name=delete,proto3" json:"delete,omitempty"`
+	Delete   bool   `protobuf:"varint,3,opt,name=delete,proto3" json:"delete"`
 	Block    int64  `protobuf:"varint,4,opt,name=block,proto3" json:"block,omitempty"`
 	StoreKey string `protobuf:"bytes,5,opt,name=store_key,json=storeKey,proto3" json:"store_key,omitempty"`
 

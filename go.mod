@@ -3,6 +3,7 @@ module github.com/kocubinski/costor-api
 go 1.20
 
 require (
+	github.com/dustin/go-humanize v1.0.0
 	github.com/golang/protobuf v1.5.3
 	github.com/rs/zerolog v1.27.0
 	github.com/stretchr/testify v1.8.4
