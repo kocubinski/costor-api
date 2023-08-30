@@ -27,6 +27,10 @@ type StreamingIterator struct {
 	totalBytes int64
 }
 
+func (it *StreamingIterator) GetNode() *api.Node {
+	return it.Node
+}
+
 func (it *StreamingIterator) Valid() bool {
 	return it.Node != nil
 }
