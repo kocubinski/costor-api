@@ -5,18 +5,21 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 
 	"github.com/golang/protobuf/proto"
 	api "github.com/kocubinski/costor-api"
 	"github.com/kocubinski/costor-api/logz"
+	"github.com/rs/zerolog"
 )
 
 var log = logz.Logger.With().Str("module", "compact").Logger()
 
 type StreamingIterator struct {
 	*api.Node
+	log      zerolog.Logger
 	nextFile chan string
 	file     *os.File
 	zr       *gzip.Reader
@@ -45,7 +48,7 @@ func (it *StreamingIterator) Next() error {
 			it.Node = nil
 			return nil
 		}
-		log.Info().Msgf("open file: %s", filepath.Base(nextFile))
+		it.log.Info().Msgf("open file: %s", filepath.Base(nextFile))
 		it.file, err = os.Open(nextFile)
 		it.zr, err = gzip.NewReader(it.file)
 		if err != nil {
@@ -114,6 +117,7 @@ func (c *StreamingContext) NewIterator(dir string) (*StreamingIterator, error) {
 	}
 	itr := &StreamingIterator{
 		nextFile: ch,
+		log:      log.With().Str("path", dir).Logger(),
 	}
 	return itr, itr.Next()
 }
@@ -139,4 +143,126 @@ func newIteratorChannel(dir string) (chan string, error) {
 		close(ch)
 	}()
 	return ch, nil
+}
+
+type ChangesetIterator struct {
+	*api.Changeset
+	// if set, set each node's StoreKey to this
+	StoreKey string
+
+	nodeItr *StreamingIterator
+}
+
+func NewChangesetIterator(dir string, storeKey ...string) (*ChangesetIterator, error) {
+	streamCtx := &StreamingContext{}
+	itr, err := streamCtx.NewIterator(dir)
+	if err != nil {
+		return nil, err
+	}
+	changeItr := &ChangesetIterator{
+		nodeItr: itr,
+	}
+	if len(storeKey) > 0 {
+		changeItr.StoreKey = storeKey[0]
+	}
+	err = changeItr.Next()
+	if err != nil {
+		return nil, err
+	}
+	return changeItr, nil
+}
+
+func (it *ChangesetIterator) Next() error {
+	it.Changeset = &api.Changeset{}
+	var err error
+	for ; it.nodeItr.Valid(); err = it.nodeItr.Next() {
+		if err != nil {
+			return err
+		}
+		node := it.nodeItr.Node
+		if it.StoreKey != "" {
+			node.StoreKey = it.StoreKey
+		}
+		if it.Version == 0 {
+			it.Version = node.Block
+		}
+		if node.Block > it.Version {
+			break
+		}
+		it.Nodes = append(it.Nodes, node)
+	}
+
+	return nil
+}
+
+func (it *ChangesetIterator) Valid() bool {
+	return it.nodeItr.Valid()
+}
+
+func (it *ChangesetIterator) GetChangeset() *api.Changeset {
+	return it.Changeset
+}
+
+type MulitChangesetIterator struct {
+	*api.Changeset
+	iterators []*ChangesetIterator
+}
+
+func NewMultiChangesetIterator(dir string) (*MulitChangesetIterator, error) {
+	multiItr := &MulitChangesetIterator{
+		Changeset: &api.Changeset{},
+	}
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		if !file.IsDir() {
+			return nil, fmt.Errorf("expected directory, got file: %s", file.Name())
+		}
+		itr, err := NewChangesetIterator(fmt.Sprintf("%s/%s", dir, file.Name()), file.Name())
+		if err != nil {
+			return nil, err
+		}
+		multiItr.iterators = append(multiItr.iterators, itr)
+	}
+	err = multiItr.Next()
+	if err != nil {
+		return nil, err
+	}
+	return multiItr, nil
+}
+
+func (it *MulitChangesetIterator) Next() error {
+	it.Changeset = &api.Changeset{Version: math.MaxInt64}
+	for _, itr := range it.iterators {
+		if itr.Valid() {
+			if itr.Version < it.Version {
+				it.Version = itr.Version
+			}
+		}
+	}
+	for _, itr := range it.iterators {
+		if itr.Version == it.Version {
+			it.Nodes = append(it.Nodes, itr.Nodes...)
+			err := itr.Next()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (it *MulitChangesetIterator) Valid() bool {
+	for _, itr := range it.iterators {
+		if !itr.Valid() {
+			return false
+		}
+	}
+	return true
+}
+
+func (it *MulitChangesetIterator) GetChangeset() *api.Changeset {
+	return it.Changeset
 }

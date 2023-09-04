@@ -91,3 +91,8 @@ func IsDecodeError(err error) bool {
 	_, ok := err.(DecodeError)
 	return ok
 }
+
+type Changeset struct {
+	Version int64
+	Nodes   []*Node
+}
