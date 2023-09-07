@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+option go_package = "github.com/kocubinski/costor-api/api";
+
+// DenomTrace is a clone from ibc-go to prevent a dependency on their lib, for now.
+message DenomTrace {
+  string path = 1;
+  string base_denom = 2;
+}

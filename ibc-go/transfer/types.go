@@ -7,11 +7,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 )
 
-var (
-	StoreKey      = "transfer"
-	DenomTraceKey = []byte{0x02}
-)
-
 type DenomTrace struct {
 	// path defines the chain of port/channel identifiers used for tracing the
 	// source of the fungible token.

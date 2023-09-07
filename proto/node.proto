@@ -8,7 +8,7 @@ message Node {
   bool delete = 3;
   int64 block = 4;
   string store_key = 5;
-  string hash = 6;
+  bytes hash = 6;
   int64 first_version = 7;
   int64 last_version = 8;
 }

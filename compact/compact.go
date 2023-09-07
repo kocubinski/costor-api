@@ -13,7 +13,6 @@ import (
 	api "github.com/kocubinski/costor-api"
 	"github.com/kocubinski/costor-api/core"
 	"github.com/kocubinski/costor-api/logz"
-	"github.com/kocubinski/costor-api/sdk/store"
 )
 
 func prettyByteSize(b int64) string {
@@ -25,25 +24,6 @@ func prettyByteSize(b int64) string {
 		bf /= 1024.0
 	}
 	return fmt.Sprintf("%.1fYiB", bf)
-}
-
-func PairsToNodes(protoBz []byte) ([]*api.Node, error) {
-	var pairs store.StoreKVPairs
-	err := proto.Unmarshal(protoBz, &pairs)
-	if err != nil {
-		return nil, err
-	}
-	nodes := make([]*api.Node, len(pairs.Pairs))
-	for i, pair := range pairs.Pairs {
-		nodes[i] = &api.Node{
-			Key:      pair.Key,
-			Value:    pair.Value,
-			Delete:   pair.Delete,
-			Block:    pairs.BlockHeight,
-			StoreKey: pairs.StoreKey,
-		}
-	}
-	return nodes, nil
 }
 
 func (c *StreamingContext) PrintDebug() {

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option go_package = "github.com/kocubinski/costor-api/api";
+
+// StoreKVPair duplicates the Cosmos SDK proto spec at:
+// https://github.com/cosmos/cosmos-sdk/blob/33eead4d42049bf8bf3f5ceacd0af256a284d342/proto/cosmos/store/v1beta1/listening.proto#L13-L18
+//
+// This is done to prevent forming a dependency on the SDK's proto files in the API.  Osmosis streaming writes using a
+// (now removed) StoreKVPairs struct (defined below) so it is needed to here unmarhsal the data.
+message StoreKVPair {
+  string store_key = 1; // the store key for the KVStore this pair originates from
+  bool delete      = 2; // true indicates a delete operation, false indicates a set operation
+  bytes key        = 3;
+  bytes value      = 4;
+}
+
+// StoreKVPairs is the format which pre 0.45x state streaming writes as (osmosis)
+message StoreKVPairs {
+  repeated StoreKVPair pairs = 1;
+  int64 block_height = 2;
+  string store_key = 3;
+  bytes key_prefix = 4;
+}
