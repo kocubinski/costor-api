@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option go_package = "github.com/kocubinski/costor-api/api";
+
+message Node {
+  bytes key = 1;
+  bytes value = 2;
+  bool delete = 3;
+  int64 block = 4;
+  string store_key = 5;
+  string hash = 6;
+  int64 first_version = 7;
+  int64 last_version = 8;
+}
+
+message Nodes {
+  repeated Node nodes = 1;
+}
+
+message DecodeError {
+  string err = 1;
+  Node node = 2;
+}
