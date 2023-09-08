@@ -9,43 +9,59 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/golang/protobuf/proto"
 	api "github.com/kocubinski/costor-api"
 	"github.com/kocubinski/costor-api/logz"
 	"github.com/rs/zerolog"
+	"google.golang.org/protobuf/proto"
 )
 
 var log = logz.Logger.With().Str("module", "compact").Logger()
 
-type StreamingIterator struct {
-	*api.Node
-	log      zerolog.Logger
-	nextFile chan string
-	file     *os.File
-	zr       *gzip.Reader
-	Err      error
+type SequencedIterator[T Sequenced] struct {
+	Node T
+	Err  error
+
+	valid     bool
+	newNodeFn func() T
+	log       zerolog.Logger
+	nextFile  chan string
+	file      *os.File
+	zr        *gzip.Reader
 	// debug
 	idx        int
 	totalNodes int
 	totalBytes int64
 }
 
-func (it *StreamingIterator) GetNode() *api.Node {
+func NewSequencedIterator[T Sequenced](dir string, newNode func() T) (*SequencedIterator[T], error) {
+	ch, err := newIteratorChannel(dir)
+	if err != nil {
+		return nil, err
+	}
+	itr := &SequencedIterator[T]{
+		nextFile:  ch,
+		log:       log.With().Str("path", dir).Logger(),
+		newNodeFn: newNode,
+	}
+	return itr, itr.Next()
+}
+
+func (it *SequencedIterator[T]) GetNode() T {
 	return it.Node
 }
 
-func (it *StreamingIterator) Valid() bool {
-	return it.Node != nil
+func (it *SequencedIterator[T]) Valid() bool {
+	return it.valid
 }
 
-func (it *StreamingIterator) Next() error {
+func (it *SequencedIterator[T]) Next() error {
 	var err error
 
 	if it.file == nil {
 		nextFile, ok := <-it.nextFile
 		// end of iteration
 		if !ok {
-			it.Node = nil
+			it.valid = false
 			return nil
 		}
 		it.log.Info().Msgf("open file: %s", filepath.Base(nextFile))
@@ -100,26 +116,19 @@ func (it *StreamingIterator) Next() error {
 	}
 
 	it.totalNodes++
-	node := &api.Node{}
+	node := it.newNodeFn()
 	if err := proto.Unmarshal(nbz, node); err != nil {
 		return err
 	}
 	it.totalBytes += int64(length)
 	it.idx += length
 	it.Node = node
+	it.valid = true
 	return nil
 }
 
-func (c *StreamingContext) NewIterator(dir string) (*StreamingIterator, error) {
-	ch, err := newIteratorChannel(dir)
-	if err != nil {
-		return nil, err
-	}
-	itr := &StreamingIterator{
-		nextFile: ch,
-		log:      log.With().Str("path", dir).Logger(),
-	}
-	return itr, itr.Next()
+func (c *StreamingContext) NewIterator(dir string) (*SequencedIterator[*api.Node], error) {
+	return NewSequencedIterator[*api.Node](dir, func() *api.Node { return &api.Node{} })
 }
 
 // newIteratorChannel returns a channel that enumerates over all files in a directory.
@@ -150,7 +159,7 @@ type ChangesetIterator struct {
 	// if set, set each node's StoreKey to this
 	StoreKey string
 
-	nodeItr *StreamingIterator
+	nodeItr *SequencedIterator[*api.Node]
 }
 
 func NewChangesetIterator(dir string, storeKey ...string) (*ChangesetIterator, error) {

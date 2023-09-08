@@ -3,7 +3,6 @@ package compact
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/dustin/go-humanize"
 )
@@ -30,41 +29,4 @@ func (stats *Stats) Report() string {
 	}
 	sb.WriteString(fmt.Sprintf("last file written: %s\n", stats.FilesWritten[len(stats.FilesWritten)-1]))
 	return sb.String()
-}
-
-func (stats *Stats) Validate() error {
-	if len(stats.FilesWritten) == 0 {
-		return fmt.Errorf("no files written")
-	}
-	ch := make(chan string)
-	wg := &sync.WaitGroup{}
-	itr := &StreamingIterator{
-		nextFile: ch,
-	}
-
-	var itrErr error
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for itrErr = itr.Next(); itr.Valid(); itrErr = itr.Next() {
-			if itrErr != nil {
-				break
-			}
-		}
-	}()
-
-	for _, filename := range stats.FilesWritten {
-		ch <- filename
-	}
-	close(ch)
-
-	wg.Wait()
-	if itrErr != nil {
-		return itrErr
-	}
-
-	if stats.NodeCount != itr.totalNodes {
-		return fmt.Errorf("node count mismatch: %d != %d", stats.NodeCount, itr.totalNodes)
-	}
-	return nil
 }
