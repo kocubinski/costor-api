@@ -18,6 +18,8 @@ message Nodes {
 }
 
 message DecodeError {
-  string err = 1;
-  Node node = 2;
+  Node node = 1;
+  string store_key = 2;
+  string human_prefix = 3;
+  string reason = 4;
 }
