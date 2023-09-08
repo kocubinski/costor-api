@@ -9,11 +9,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/golang/protobuf/proto"
 	api "github.com/kocubinski/costor-api"
 	"github.com/kocubinski/costor-api/core"
 	"github.com/kocubinski/costor-api/logz"
+	"google.golang.org/protobuf/proto"
 )
+
+type Sequenced interface {
+	proto.Message
+	Sequence() int64
+}
 
 func prettyByteSize(b int64) string {
 	bf := float64(b)
@@ -33,7 +38,7 @@ func (c *StreamingContext) PrintDebug() {
 type StreamingContext struct {
 	core.Context
 	OutDir             string
-	In                 chan *api.Node
+	In                 chan Sequenced
 	MaxFileSize        int
 	WorkerId           int
 	ExpectedEfficiency float64
@@ -118,11 +123,12 @@ func (c *StreamingContext) Compact() (*Stats, error) {
 
 	for node := range c.In {
 		stats.NodeCount++
-		if node.Block < c.minBlock {
-			c.minBlock = node.Block
+		seq := node.Sequence()
+		if seq < c.minBlock {
+			c.minBlock = seq
 		}
-		if node.Block > c.maxBlock {
-			c.maxBlock = node.Block
+		if seq > c.maxBlock {
+			c.maxBlock = seq
 		}
 
 		protoBz, err := proto.Marshal(node)
