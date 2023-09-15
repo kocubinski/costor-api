@@ -14,3 +14,9 @@ func (e *DecodeError) Sequence() int64 {
 	}
 	return e.Node.Block
 }
+
+type NodeIterator interface {
+	Next() error
+	Valid() bool
+	GetNode() *Node
+}

@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 
@@ -154,12 +153,51 @@ func newIteratorChannel(dir string) (chan string, error) {
 	return ch, nil
 }
 
-type ChangesetIterator struct {
-	*api.Changeset
+var _ api.NodeIterator = (*StoreKeyedIterator)(nil)
+
+// StoreKeyedIterator iterates over all nodes in a directory, setting each node's StoreKey to the given value.
+type StoreKeyedIterator struct {
 	// if set, set each node's StoreKey to this
 	StoreKey string
 
-	nodeItr *SequencedIterator[*api.Node]
+	itr     *SequencedIterator[*api.Node]
+	paused  bool
+	version int64
+}
+
+func (s *StoreKeyedIterator) Next() error {
+	if s.paused {
+		return nil
+	}
+	if err := s.itr.Next(); err != nil {
+		return err
+	}
+
+	if s.itr.Node != nil && s.StoreKey != "" {
+		s.itr.Node.StoreKey = s.StoreKey
+	}
+	if s.itr.Node.Block > s.version {
+		s.paused = true
+	}
+
+	return nil
+}
+
+func (s *StoreKeyedIterator) Valid() bool {
+	return !s.paused && s.itr.Valid()
+}
+
+func (s *StoreKeyedIterator) GetNode() *api.Node {
+	if s.paused {
+		return nil
+	}
+	return s.itr.Node
+}
+
+type ChangesetIterator struct {
+	nodes    *StoreKeyedIterator
+	version  int64
+	nextNode *api.Node
 }
 
 func NewChangesetIterator(dir string, storeKey ...string) (*ChangesetIterator, error) {
@@ -168,11 +206,12 @@ func NewChangesetIterator(dir string, storeKey ...string) (*ChangesetIterator, e
 	if err != nil {
 		return nil, err
 	}
-	changeItr := &ChangesetIterator{
-		nodeItr: itr,
-	}
+	skItr := &StoreKeyedIterator{itr: itr}
 	if len(storeKey) > 0 {
-		changeItr.StoreKey = storeKey[0]
+		skItr.StoreKey = storeKey[0]
+	}
+	changeItr := &ChangesetIterator{
+		nodes: skItr,
 	}
 	err = changeItr.Next()
 	if err != nil {
@@ -182,34 +221,29 @@ func NewChangesetIterator(dir string, storeKey ...string) (*ChangesetIterator, e
 }
 
 func (it *ChangesetIterator) Next() error {
-	it.Changeset = &api.Changeset{}
-	var err error
-	for ; it.nodeItr.Valid(); err = it.nodeItr.Next() {
-		if err != nil {
-			return err
-		}
-		node := it.nodeItr.Node
-		if it.StoreKey != "" {
-			node.StoreKey = it.StoreKey
-		}
-		if it.Version == 0 {
-			it.Version = node.Block
-		}
-		if node.Block > it.Version {
-			break
-		}
-		it.Nodes = append(it.Nodes, node)
+	if !it.nodes.Valid() && !it.nodes.paused {
+		it.nodes = nil
+		return nil
 	}
-
+	if it.nodes.paused {
+		it.nodes.paused = false
+		it.nodes.version = it.nodes.GetNode().Block
+	} else {
+		return fmt.Errorf("expected paused iterator")
+	}
 	return nil
 }
 
 func (it *ChangesetIterator) Valid() bool {
-	return it.nodeItr.Valid()
+	return it.nodes.Valid()
 }
 
-func (it *ChangesetIterator) GetChangeset() *api.Changeset {
-	return it.Changeset
+func (it *ChangesetIterator) Nodes() api.NodeIterator {
+	return it.nodes
+}
+
+func (it *ChangesetIterator) Version() int64 {
+	return it.version
 }
 
 type MulitChangesetIterator struct {
@@ -243,23 +277,24 @@ func NewMultiChangesetIterator(dir string) (*MulitChangesetIterator, error) {
 }
 
 func (it *MulitChangesetIterator) Next() error {
-	it.Changeset = &api.Changeset{Version: math.MaxInt64}
-	for _, itr := range it.iterators {
-		if itr.Valid() {
-			if itr.Version < it.Version {
-				it.Version = itr.Version
-			}
-		}
-	}
-	for _, itr := range it.iterators {
-		if itr.Version == it.Version {
-			it.Nodes = append(it.Nodes, itr.Nodes...)
-			err := itr.Next()
-			if err != nil {
-				return err
-			}
-		}
-	}
+	//it.Changeset = &api.Changeset{Version: math.MaxInt64}
+	//for _, itr := range it.iterators {
+	//	if itr.Valid() {
+	//		if itr.Version < it.Version {
+	//			it.Version = itr.Version
+	//		}
+	//	}
+	//}
+	//for _, itr := range it.iterators {
+	//	if itr.Version == it.Version {
+	//		it.Nodes = append(it.Nodes, itr.Nodes...)
+	//		err := itr.Next()
+	//		if err != nil {
+	//			return err
+	//		}
+	//	}
+	//}
+	//return nil
 	return nil
 }
 
@@ -272,6 +307,12 @@ func (it *MulitChangesetIterator) Valid() bool {
 	return true
 }
 
-func (it *MulitChangesetIterator) GetChangeset() *api.Changeset {
-	return it.Changeset
+func (it *MulitChangesetIterator) Nodes() api.NodeIterator {
+	return nil
+	//return it.Changeset
+}
+
+func (it *MulitChangesetIterator) Version() int64 {
+	//return it.Version
+	return 0
 }
