@@ -184,6 +184,12 @@ func (s *StoreKeyedIterator) Next() error {
 }
 
 func (s *StoreKeyedIterator) Valid() bool {
+	if s == nil {
+		return false
+	}
+	if s.itr == nil {
+		return false
+	}
 	return !s.paused && s.itr.Valid()
 }
 
@@ -206,7 +212,7 @@ func NewChangesetIterator(dir string, storeKey ...string) (*ChangesetIterator, e
 	if err != nil {
 		return nil, err
 	}
-	skItr := &StoreKeyedIterator{itr: itr}
+	skItr := &StoreKeyedIterator{itr: itr, paused: true}
 	if len(storeKey) > 0 {
 		skItr.StoreKey = storeKey[0]
 	}

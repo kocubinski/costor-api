@@ -56,7 +56,7 @@ func Test_WriteAndRead(t *testing.T) {
 		node := &api.Node{
 			Key:      k,
 			Value:    v,
-			Block:    int64(i),
+			Block:    int64(i/10) + 1,
 			StoreKey: "test",
 		}
 		nodeCtx.In <- node
@@ -73,7 +73,7 @@ func Test_WriteAndRead(t *testing.T) {
 		require.NoError(t, err)
 		node := nodeItr.Node
 		require.Equal(t, "test", node.StoreKey)
-		require.Equal(t, int64(cnt), node.Block)
+		require.Equal(t, int64(cnt/10)+1, node.Block)
 		cnt++
 	}
 	require.Equal(t, iterations, cnt)
@@ -85,9 +85,25 @@ func Test_WriteAndRead(t *testing.T) {
 		require.NoError(t, err)
 		node := errItr.Node
 		require.Equal(t, "test", node.StoreKey)
-		require.Equal(t, int64(cnt), node.Node.Block)
+		require.Equal(t, int64(cnt/10)+1, node.Node.Block)
 		require.Equal(t, "testing", node.Reason)
 		cnt++
+	}
+	require.Equal(t, iterations, cnt)
+
+	cnt = 0
+	csItr, err := compact.NewChangesetIterator(nodeDir)
+	require.NoError(t, err)
+	for ; csItr.Valid(); err = csItr.Next() {
+		require.NoError(t, err)
+		nodes := csItr.Nodes()
+		for ; nodes.Valid(); err = nodes.Next() {
+			require.NoError(t, err)
+			node := nodes.GetNode()
+			require.Equal(t, "test", node.StoreKey)
+			require.Equal(t, int64(cnt/10)+1, node.Block)
+			cnt++
+		}
 	}
 	require.Equal(t, iterations, cnt)
 }
