@@ -102,6 +102,7 @@ func Test_WriteAndRead(t *testing.T) {
 			node := nodes.GetNode()
 			require.Equal(t, "test", node.StoreKey)
 			require.Equal(t, int64(cnt/10)+1, node.Block)
+			require.Equal(t, node.Block, csItr.Version())
 			cnt++
 		}
 	}

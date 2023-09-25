@@ -249,7 +249,7 @@ func (it *ChangesetIterator) Nodes() api.NodeIterator {
 }
 
 func (it *ChangesetIterator) Version() int64 {
-	return it.version
+	return it.nodes.version
 }
 
 type MulitChangesetIterator struct {
